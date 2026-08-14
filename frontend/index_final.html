@@ -25,6 +25,7 @@
         .toast { position: fixed; bottom: 20px; right: 20px; background: #2b6fde; color: white; padding: 12px 20px; border-radius: 12px; box-shadow: 0 8px 30px rgba(43,111,222,0.4); z-index: 1000; cursor: pointer; animation: slideUp 0.3s ease; max-width: 350px; }
         @keyframes slideUp { from { transform: translateY(100px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
         .toast.hidden { display: none; }
+        .temp-message { opacity: 0.6; }
     </style>
 </head>
 <body>
@@ -134,8 +135,9 @@
     </div>
 
     <script>
-        const API_URL = 'http://localhost:5001/api';
-        const socket = io('http://localhost:5001');
+        // ========== ПОДКЛЮЧЕНИЕ К БЭКЕНДУ НА RENDER ==========
+        const API_URL = 'https://eight88-messenger.onrender.com/api';
+        const socket = io('https://eight88-messenger.onrender.com');
 
         let currentUser = null;
         let currentToken = null;
@@ -240,20 +242,38 @@
             socket.emit('authenticate', token);
             setupSocket();
             renderChats();
+
+            // Приветственное уведомление
+            showToast('system', '👋 Добро пожаловать в 888!');
         }
 
-        // ========== ИСПРАВЛЕННАЯ ФУНКЦИЯ ==========
         function setupSocket() {
             socket.off('new_message');
             socket.off('message_sent');
+            socket.off('new_chat');
 
+            // Новый чат от сервера (при входе)
+            socket.on('new_chat', (data) => {
+                console.log('📨 Новый чат от:', data.username);
+                
+                if (!chats[data.userId]) {
+                    chats[data.userId] = {
+                        user: { id: data.userId, username: data.username },
+                        messages: [],
+                        unread: 1,
+                        lastMessage: data.lastMessage
+                    };
+                    renderChats();
+                    showToast(data.username, data.lastMessage.text);
+                }
+            });
+
+            // Подтверждение отправки
             socket.on('message_sent', (msg) => {
                 console.log('✅ Сообщение сохранено:', msg);
-                
                 const chat = chats[msg.toId];
                 if (chat) {
-                    // Ищем ВРЕМЕННОЕ сообщение с таким же текстом
-                    const idx = chat.messages.findIndex(m => m._temp === true && m.text === msg.text);
+                    const idx = chat.messages.findIndex(m => m._temp && m.id === msg.id);
                     if (idx !== -1) {
                         chat.messages[idx] = msg;
                         chat.lastMessage = msg;
@@ -266,6 +286,7 @@
                 }
             });
 
+            // Новое сообщение
             socket.on('new_message', (msg) => {
                 if (msg.fromId === currentUser.id) return;
                 console.log('📨 Новое сообщение от:', msg.fromId);
@@ -292,11 +313,12 @@
             chats[userId].lastMessage = msg;
             
             if (selectedChatId === userId) {
+                chats[userId].unread = 0;
                 messages = chats[userId].messages;
                 renderMessages();
             } else {
                 chats[userId].unread = (chats[userId].unread || 0) + 1;
-                showToast(userId, msg.text);
+                showToast(chats[userId].user.username, msg.text);
             }
             renderChats();
         }
@@ -443,6 +465,16 @@
         messageInput.onkeydown = e => { if (e.key === 'Enter') sendMessage(); };
 
         function showToast(userId, text) {
+            // Если это системное сообщение
+            if (userId === 'system') {
+                toastName.textContent = '💬';
+                toastText.textContent = text;
+                toast.classList.remove('hidden');
+                clearTimeout(toastTimer);
+                toastTimer = setTimeout(() => toast.classList.add('hidden'), 4000);
+                return;
+            }
+
             const u = chats[userId]?.user;
             if (!u) return;
             toastName.textContent = u.username;
@@ -505,6 +537,8 @@
         const savedUser = JSON.parse(localStorage.getItem('user'));
         if (savedToken && savedUser) loginUser(savedUser, savedToken);
         console.log('🚀 888 мессенджер запущен!');
+        console.log('🔗 Бэкенд: https://eight88-messenger.onrender.com');
+        console.log('🌐 Сайт: https://biwust.github.io/888-messenger/');
     </script>
 </body>
 </html>
