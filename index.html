@@ -361,8 +361,17 @@
             });
         }
 
+        // ========== ОТКРЫТИЕ ЧАТА (С ОТМЕТКОЙ О ПРОЧТЕНИИ) ==========
         function openChat(userId) {
             selectedChatId = userId;
+            
+            // === НОВОЕ: Отправляем отметку о прочтении ===
+            socket.emit('mark_read', {
+                fromId: userId,
+                toId: currentUser.id
+            });
+            // ============================================
+
             if (chats[userId]) {
                 chats[userId].unread = 0;
                 messages = chats[userId].messages || [];
@@ -390,7 +399,12 @@
                 messages = res.data;
                 if (!chats[userId]) {
                     const u = await axios.get(`${API_URL}/users/${userId}`);
-                    chats[userId] = { user: u.data, messages: messages, unread: 0, lastMessage: messages.length > 0 ? messages[messages.length - 1] : null };
+                    chats[userId] = { 
+                        user: u.data, 
+                        messages: messages, 
+                        unread: 0, 
+                        lastMessage: messages.length > 0 ? messages[messages.length - 1] : null 
+                    };
                 } else {
                     chats[userId].messages = messages;
                     chats[userId].lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
