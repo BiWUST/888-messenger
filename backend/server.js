@@ -135,12 +135,26 @@ io.on('connection', (socket) => {
         try {
             const decoded = jwt.verify(token, SECRET_KEY);
             socket.userId = decoded.id;
-            
-            // ПОДПИСЫВАЕМ ПОЛЬЗОВАТЕЛЯ НА ЕГО КОМНАТУ!
             socket.join(`user_${decoded.id}`);
-            
-            console.log(`✅ Пользователь ${decoded.id} аутентифицирован и подписан на комнату user_${decoded.id}`);
-            
+            console.log(`✅ Пользователь ${decoded.id} аутентифицирован`);
+    
+            // === НОВОЕ: Отправляем все непрочитанные сообщения ===
+            Message.findAll({
+                where: {
+                    toId: decoded.id,
+                    read: false
+                }
+            }).then(messages => {
+                if (messages.length > 0) {
+                    console.log(`📦 Отправка ${messages.length} непрочитанных сообщений для ${decoded.id}`);
+                    messages.forEach(msg => {
+                        socket.emit('new_message', msg);
+                        // Сразу помечаем как прочитанные
+                        msg.update({ read: true });
+                    });
+                }
+            });
+    
             // Отправляем подтверждение
             socket.emit('authenticated', { userId: decoded.id });
         } catch (error) {
