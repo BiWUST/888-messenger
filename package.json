@@ -1,0 +1,13 @@
+{
+    "name": "888-messenger",
+    "version": "1.0.0",
+    "description": "888 мессенджер с цифровыми ID",
+    "main": "backend/server.js",
+    "scripts": {
+      "start": "node backend/server.js",
+      "backend": "cd backend && npm start"
+    },
+    "engines": {
+      "node": "22.14.0"
+    }
+  }

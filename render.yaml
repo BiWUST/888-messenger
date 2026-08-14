@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: 888-messenger
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: cd backend && npm install
+    startCommand: node backend/server.js
+    envVars:
+      - key: NODE_VERSION
+        value: 22.14.0

@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>888 - Мессенджер</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body { background: #0a0a0a; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; margin: 0; }
+        .glass { background: rgba(20,20,30,0.8); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.05); }
+        .message-bubble-own { background: #2b6fde; border-radius: 16px 16px 4px 16px; }
+        .message-bubble-other { background: #2a2a35; border-radius: 16px 16px 16px 4px; }
+        .scrollbar-hide::-webkit-scrollbar { width: 4px; }
+        .scrollbar-hide::-webkit-scrollbar-thumb { background: #3a3a4a; border-radius: 10px; }
+        input:focus { outline: none; }
+        .hidden { display: none !important; }
+        .chat-item { border-radius: 12px; cursor: pointer; transition: all 0.2s; padding: 8px 12px; }
+        .chat-item:hover { background: #1a1a2e; }
+        .chat-item.active { background: #1a1a2e; }
+        .unread-badge { background: #2b6fde; color: white; border-radius: 50%; min-width: 20px; height: 20px; font-size: 11px; display: flex; align-items: center; justify-content: center; padding: 0 6px; }
+        .last-message { font-size: 13px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
+        .last-message.unread { color: #e0e0e0; font-weight: 500; }
+        .toast { position: fixed; bottom: 20px; right: 20px; background: #2b6fde; color: white; padding: 12px 20px; border-radius: 12px; box-shadow: 0 8px 30px rgba(43,111,222,0.4); z-index: 1000; cursor: pointer; animation: slideUp 0.3s ease; max-width: 350px; }
+        @keyframes slideUp { from { transform: translateY(100px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .toast.hidden { display: none; }
+    </style>
+</head>
+<body>
+
+    <div id="toast" class="toast hidden">
+        <strong id="toastName">Пользователь</strong>
+        <span id="toastText">написал: привет</span>
+    </div>
+
+    <!-- АВТОРИЗАЦИЯ -->
+    <div id="authScreen" class="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#0a0a0a] to-[#1a1a2e] p-4">
+        <div class="glass rounded-2xl p-8 w-full max-w-md shadow-2xl">
+            <div class="text-center mb-8">
+                <h1 class="text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">888</h1>
+                <p class="text-gray-400 text-sm mt-1">Твой цифровой мир</p>
+            </div>
+            <div class="flex gap-2 mb-6 bg-[#1a1a2e] rounded-xl p-1">
+                <button id="loginTab" class="flex-1 py-2 rounded-lg transition bg-[#2b6fde] text-white">Вход</button>
+                <button id="registerTab" class="flex-1 py-2 rounded-lg transition text-gray-400">Регистрация</button>
+            </div>
+            <form id="loginForm" onsubmit="return false;">
+                <div class="mb-4">
+                    <label class="text-gray-400 text-sm block mb-1">Ваш ID (только цифры)</label>
+                    <input id="loginId" type="text" placeholder="Например: 123456" class="w-full bg-[#1a1a2e] rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-[#2b6fde] text-white">
+                </div>
+                <div class="mb-4">
+                    <label class="text-gray-400 text-sm block mb-1">Пароль</label>
+                    <input id="loginPassword" type="password" placeholder="Минимум 4 символа" class="w-full bg-[#1a1a2e] rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-[#2b6fde] text-white">
+                </div>
+                <button id="loginBtn" type="button" class="w-full bg-[#2b6fde] hover:bg-[#1e5bb8] transition py-3 rounded-xl font-semibold">Войти</button>
+            </form>
+            <form id="registerForm" class="hidden" onsubmit="return false;">
+                <div class="mb-4">
+                    <label class="text-gray-400 text-sm block mb-1">Твой ID (только цифры)</label>
+                    <input id="registerId" type="text" placeholder="Например: 123456" class="w-full bg-[#1a1a2e] rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-[#2b6fde] text-white">
+                </div>
+                <div class="mb-4">
+                    <label class="text-gray-400 text-sm block mb-1">Твое имя</label>
+                    <input id="registerUsername" type="text" placeholder="Как тебя называть?" class="w-full bg-[#1a1a2e] rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-[#2b6fde] text-white">
+                </div>
+                <div class="mb-4">
+                    <label class="text-gray-400 text-sm block mb-1">Пароль</label>
+                    <input id="registerPassword" type="password" placeholder="Минимум 4 символа" class="w-full bg-[#1a1a2e] rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-[#2b6fde] text-white">
+                </div>
+                <button id="registerBtn" type="button" class="w-full bg-[#2b6fde] hover:bg-[#1e5bb8] transition py-3 rounded-xl font-semibold">Создать аккаунт</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ГЛАВНЫЙ ЭКРАН -->
+    <div id="mainScreen" class="hidden flex h-screen bg-[#0a0a0a]">
+        <div class="w-80 bg-[#12121a] border-r border-[#1a1a2e] flex flex-col h-screen">
+            <div class="p-4 border-b border-[#1a1a2e]">
+                <div class="flex justify-between items-center">
+                    <h1 class="text-xl font-bold">888</h1>
+                    <button id="logoutBtn" class="text-gray-400 hover:text-white text-sm">Выйти</button>
+                </div>
+                <div class="text-sm text-gray-400 mt-1">ID: <span id="currentUserId" class="text-blue-400"></span></div>
+            </div>
+            <div class="p-3 border-b border-[#1a1a2e]">
+                <input id="searchInput" type="text" placeholder="🔍 Найти по ID..." class="w-full bg-[#1a1a2e] rounded-xl px-4 py-2 outline-none text-sm focus:ring-1 focus:ring-[#2b6fde] text-white">
+                <div id="searchResults" class="mt-2 hidden"></div>
+            </div>
+            <div id="chatsList" class="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-hide">
+                <div id="emptyChats" class="text-center text-gray-500 text-sm mt-10">
+                    <div class="text-4xl mb-3">💬</div>
+                    <p>Нет чатов</p>
+                    <p class="text-xs text-gray-600">Найди друга по ID</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex-1 flex flex-col bg-[#0f0f17]">
+            <div id="chatHeader" class="p-4 border-b border-[#1a1a2e] bg-[#12121a] hidden">
+                <div class="flex items-center gap-3">
+                    <div id="chatAvatar" class="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-blue-500 flex items-center justify-center font-bold"></div>
+                    <div>
+                        <div id="chatName" class="font-semibold"></div>
+                        <div id="chatId" class="text-xs text-gray-400"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="messagesContainer" class="flex-1 overflow-y-auto p-4 space-y-2 scrollbar-hide">
+                <div id="emptyMessages" class="text-center text-gray-500 mt-10">
+                    <div class="text-4xl mb-3">👋</div>
+                    <p>Нет сообщений</p>
+                    <p class="text-xs text-gray-600">Напиши что-нибудь</p>
+                </div>
+                <div id="messagesList"></div>
+                <div id="messagesEnd"></div>
+            </div>
+            <div id="inputArea" class="hidden p-4 border-t border-[#1a1a2e] bg-[#12121a]">
+                <div class="flex gap-3">
+                    <input id="messageInput" type="text" placeholder="Введите сообщение..." class="flex-1 bg-[#1a1a2e] rounded-xl px-4 py-3 outline-none focus:ring-1 focus:ring-[#2b6fde] text-white">
+                    <button id="sendBtn" class="bg-[#2b6fde] hover:bg-[#1e5bb8] transition px-6 rounded-xl font-semibold">Отправить</button>
+                </div>
+            </div>
+            <div id="welcomeScreen" class="flex-1 flex items-center justify-center">
+                <div class="text-center text-gray-500">
+                    <div class="text-6xl mb-4">🤖</div>
+                    <h2 class="text-xl font-semibold mb-2">Добро пожаловать в 888!</h2>
+                    <p>Найди друга по ID в поиске слева</p>
+                    <p class="text-sm text-gray-600">и начни общение</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:5001/api';
+        const socket = io('http://localhost:5001');
+
+        let currentUser = null;
+        let currentToken = null;
+        let selectedChatId = null;
+        let messages = [];
+        let chats = {};
+
+        const $ = id => document.getElementById(id);
+        const authScreen = $('authScreen');
+        const mainScreen = $('mainScreen');
+        const loginTab = $('loginTab');
+        const registerTab = $('registerTab');
+        const loginForm = $('loginForm');
+        const registerForm = $('registerForm');
+        const loginId = $('loginId');
+        const loginPassword = $('loginPassword');
+        const registerId = $('registerId');
+        const registerUsername = $('registerUsername');
+        const registerPassword = $('registerPassword');
+        const loginBtn = $('loginBtn');
+        const registerBtn = $('registerBtn');
+        const logoutBtn = $('logoutBtn');
+        const currentUserId = $('currentUserId');
+        const searchInput = $('searchInput');
+        const searchResults = $('searchResults');
+        const messagesList = $('messagesList');
+        const messagesEnd = $('messagesEnd');
+        const emptyMessages = $('emptyMessages');
+        const messageInput = $('messageInput');
+        const sendBtn = $('sendBtn');
+        const chatHeader = $('chatHeader');
+        const chatAvatar = $('chatAvatar');
+        const chatName = $('chatName');
+        const chatId = $('chatId');
+        const inputArea = $('inputArea');
+        const welcomeScreen = $('welcomeScreen');
+        const chatsList = $('chatsList');
+        const toast = $('toast');
+        const toastName = $('toastName');
+        const toastText = $('toastText');
+        let toastTimer = null;
+
+        // ========== АВТОРИЗАЦИЯ ==========
+        loginTab.onclick = () => {
+            loginTab.className = 'flex-1 py-2 rounded-lg transition bg-[#2b6fde] text-white';
+            registerTab.className = 'flex-1 py-2 rounded-lg transition text-gray-400';
+            loginForm.classList.remove('hidden');
+            registerForm.classList.add('hidden');
+        };
+        registerTab.onclick = () => {
+            registerTab.className = 'flex-1 py-2 rounded-lg transition bg-[#2b6fde] text-white';
+            loginTab.className = 'flex-1 py-2 rounded-lg transition text-gray-400';
+            registerForm.classList.remove('hidden');
+            loginForm.classList.add('hidden');
+        };
+
+        loginBtn.onclick = async () => {
+            const id = loginId.value.trim();
+            const password = loginPassword.value.trim();
+            if (id.length < 4) return alert('ID минимум 4 цифры');
+            if (password.length < 4) return alert('Пароль минимум 4 символа');
+            try {
+                const res = await axios.post(`${API_URL}/login`, { id, password });
+                localStorage.setItem('token', res.data.token);
+                localStorage.setItem('user', JSON.stringify(res.data.user));
+                loginUser(res.data.user, res.data.token);
+            } catch (e) { alert(e.response?.data?.error || 'Ошибка входа'); }
+        };
+
+        registerBtn.onclick = async () => {
+            const id = registerId.value.trim();
+            const username = registerUsername.value.trim();
+            const password = registerPassword.value.trim();
+            if (id.length < 4) return alert('ID минимум 4 цифры');
+            if (!/^\d+$/.test(id)) return alert('Только цифры');
+            if (username.length < 2) return alert('Имя минимум 2 символа');
+            if (password.length < 4) return alert('Пароль минимум 4 символа');
+            try {
+                const res = await axios.post(`${API_URL}/register`, { id, username, password });
+                localStorage.setItem('token', res.data.token);
+                localStorage.setItem('user', JSON.stringify(res.data.user));
+                loginUser(res.data.user, res.data.token);
+            } catch (e) { alert(e.response?.data?.error || 'Ошибка регистрации'); }
+        };
+
+        loginId.onkeydown = e => { if (e.key === 'Enter') loginBtn.click(); };
+        loginPassword.onkeydown = e => { if (e.key === 'Enter') loginBtn.click(); };
+        registerId.onkeydown = e => { if (e.key === 'Enter') registerBtn.click(); };
+        registerUsername.onkeydown = e => { if (e.key === 'Enter') registerBtn.click(); };
+        registerPassword.onkeydown = e => { if (e.key === 'Enter') registerBtn.click(); };
+
+        // ========== ОСНОВНОЙ ЭКРАН ==========
+        function loginUser(user, token) {
+            currentUser = user;
+            currentToken = token;
+            chats = {};
+            selectedChatId = null;
+            messages = [];
+            authScreen.classList.add('hidden');
+            mainScreen.classList.remove('hidden');
+            currentUserId.textContent = user.id;
+            socket.emit('authenticate', token);
+            setupSocket();
+            renderChats();
+        }
+
+        // ========== ИСПРАВЛЕННАЯ ФУНКЦИЯ ==========
+        function setupSocket() {
+            socket.off('new_message');
+            socket.off('message_sent');
+
+            socket.on('message_sent', (msg) => {
+                console.log('✅ Сообщение сохранено:', msg);
+                
+                const chat = chats[msg.toId];
+                if (chat) {
+                    // Ищем ВРЕМЕННОЕ сообщение с таким же текстом
+                    const idx = chat.messages.findIndex(m => m._temp === true && m.text === msg.text);
+                    if (idx !== -1) {
+                        chat.messages[idx] = msg;
+                        chat.lastMessage = msg;
+                        if (selectedChatId === msg.toId) {
+                            messages = chat.messages;
+                            renderMessages();
+                        }
+                        renderChats();
+                    }
+                }
+            });
+
+            socket.on('new_message', (msg) => {
+                if (msg.fromId === currentUser.id) return;
+                console.log('📨 Новое сообщение от:', msg.fromId);
+                
+                if (!chats[msg.fromId]) {
+                    axios.get(`${API_URL}/users/${msg.fromId}`).then(res => {
+                        chats[msg.fromId] = {
+                            user: res.data,
+                            messages: [],
+                            unread: 0,
+                            lastMessage: null
+                        };
+                        addMessage(msg.fromId, msg);
+                    }).catch(() => {});
+                } else {
+                    addMessage(msg.fromId, msg);
+                }
+            });
+        }
+
+        function addMessage(userId, msg) {
+            if (!chats[userId]) return;
+            chats[userId].messages.push(msg);
+            chats[userId].lastMessage = msg;
+            
+            if (selectedChatId === userId) {
+                messages = chats[userId].messages;
+                renderMessages();
+            } else {
+                chats[userId].unread = (chats[userId].unread || 0) + 1;
+                showToast(userId, msg.text);
+            }
+            renderChats();
+        }
+
+        function renderChats() {
+            const ids = Object.keys(chats);
+            if (ids.length === 0) {
+                chatsList.innerHTML = `<div class="text-center text-gray-500 text-sm mt-10"><div class="text-4xl mb-3">💬</div><p>Нет чатов</p><p class="text-xs text-gray-600">Найди друга по ID</p></div>`;
+                return;
+            }
+            ids.sort((a, b) => {
+                const ta = chats[a].lastMessage?.createdAt || 0;
+                const tb = chats[b].lastMessage?.createdAt || 0;
+                return new Date(tb) - new Date(ta);
+            });
+            let html = '';
+            ids.forEach(id => {
+                const c = chats[id];
+                const u = c.user;
+                const last = c.lastMessage;
+                const unread = c.unread || 0;
+                const active = selectedChatId === id;
+                const lastText = last ? last.text : 'Нет сообщений';
+                const time = last ? new Date(last.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+                html += `
+                    <div class="chat-item ${active ? 'active' : ''}" data-id="${id}">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center font-bold flex-shrink-0">${u.username[0]}</div>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex justify-between"><span class="font-medium text-sm">${u.username}</span><span class="text-xs text-gray-500">${time}</span></div>
+                                <div class="flex justify-between"><span class="last-message ${unread > 0 ? 'unread' : ''}">${lastText}</span>${unread > 0 ? `<span class="unread-badge">${unread}</span>` : ''}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            chatsList.innerHTML = html;
+            document.querySelectorAll('.chat-item').forEach(el => {
+                el.onclick = () => openChat(el.dataset.id);
+            });
+        }
+
+        function openChat(userId) {
+            selectedChatId = userId;
+            if (chats[userId]) {
+                chats[userId].unread = 0;
+                messages = chats[userId].messages || [];
+            } else {
+                messages = [];
+                loadMessages(userId);
+            }
+            chatHeader.classList.remove('hidden');
+            inputArea.classList.remove('hidden');
+            welcomeScreen.classList.add('hidden');
+            const u = chats[userId]?.user;
+            if (u) {
+                chatAvatar.textContent = u.username[0];
+                chatName.textContent = u.username;
+                chatId.textContent = 'ID: ' + u.id;
+            }
+            renderMessages();
+            renderChats();
+            messageInput.focus();
+        }
+
+        async function loadMessages(userId) {
+            try {
+                const res = await axios.get(`${API_URL}/messages/${currentUser.id}/${userId}`);
+                messages = res.data;
+                if (!chats[userId]) {
+                    const u = await axios.get(`${API_URL}/users/${userId}`);
+                    chats[userId] = { user: u.data, messages: messages, unread: 0, lastMessage: messages.length > 0 ? messages[messages.length - 1] : null };
+                } else {
+                    chats[userId].messages = messages;
+                    chats[userId].lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+                }
+                renderMessages();
+                renderChats();
+            } catch (e) { console.error(e); }
+        }
+
+        function renderMessages() {
+            messagesList.innerHTML = '';
+            if (!messages || messages.length === 0) { emptyMessages.style.display = 'block'; return; }
+            emptyMessages.style.display = 'none';
+            messages.forEach(msg => {
+                const isOwn = msg.fromId === currentUser.id;
+                const isTemp = msg._temp === true;
+                const div = document.createElement('div');
+                div.className = `flex ${isOwn ? 'justify-end' : 'justify-start'}`;
+                const time = isTemp ? '⏳' : new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const tempClass = isTemp ? 'temp-message' : '';
+                div.innerHTML = `
+                    <div class="max-w-[70%] p-3 ${isOwn ? 'message-bubble-own' : 'message-bubble-other'} ${tempClass}">
+                        <div class="text-sm">${msg.text}</div>
+                        <div class="text-xs mt-1 ${isOwn ? 'text-blue-200' : 'text-gray-400'}">${time}</div>
+                    </div>
+                `;
+                messagesList.appendChild(div);
+            });
+            messagesEnd.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function sendMessage() {
+            const text = messageInput.value.trim();
+            if (!text || !selectedChatId) return;
+            
+            const tempMsg = {
+                id: Date.now(),
+                text: text,
+                fromId: currentUser.id,
+                toId: selectedChatId,
+                createdAt: new Date().toISOString(),
+                _temp: true
+            };
+            
+            if (!chats[selectedChatId]) {
+                axios.get(`${API_URL}/users/${selectedChatId}`).then(res => {
+                    chats[selectedChatId] = {
+                        user: res.data,
+                        messages: [],
+                        unread: 0,
+                        lastMessage: null
+                    };
+                    chats[selectedChatId].messages.push(tempMsg);
+                    chats[selectedChatId].lastMessage = tempMsg;
+                    messages = chats[selectedChatId].messages;
+                    renderMessages();
+                    renderChats();
+                });
+            } else {
+                chats[selectedChatId].messages.push(tempMsg);
+                chats[selectedChatId].lastMessage = tempMsg;
+                messages = chats[selectedChatId].messages;
+                renderMessages();
+                renderChats();
+            }
+            
+            messageInput.value = '';
+            socket.emit('send_message', { toId: selectedChatId, text });
+        }
+
+        sendBtn.onclick = sendMessage;
+        messageInput.onkeydown = e => { if (e.key === 'Enter') sendMessage(); };
+
+        function showToast(userId, text) {
+            const u = chats[userId]?.user;
+            if (!u) return;
+            toastName.textContent = u.username;
+            toastText.textContent = ': ' + text;
+            toast.classList.remove('hidden');
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => toast.classList.add('hidden'), 3000);
+        }
+        toast.onclick = () => {
+            const name = toastName.textContent;
+            for (const [id, c] of Object.entries(chats)) {
+                if (c.user.username === name) { openChat(id); toast.classList.add('hidden'); break; }
+            }
+        };
+
+        searchInput.oninput = async function() {
+            const q = this.value.trim();
+            if (q.length < 2) { searchResults.classList.add('hidden'); return; }
+            try {
+                const res = await axios.get(`${API_URL}/users/search/${q}`);
+                const users = res.data.filter(u => u.id !== currentUser.id);
+                if (!users.length) { searchResults.classList.add('hidden'); return; }
+                searchResults.classList.remove('hidden');
+                searchResults.innerHTML = '<div class="text-xs text-gray-400 px-2 mb-2">Результаты:</div>';
+                users.forEach(u => {
+                    const d = document.createElement('div');
+                    d.className = 'flex items-center gap-3 p-2 rounded-xl hover:bg-[#1a1a2e] cursor-pointer transition';
+                    d.innerHTML = `
+                        <div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center font-bold">${u.username[0]}</div>
+                        <div><div class="font-medium">${u.username}</div><div class="text-xs text-gray-400">ID: ${u.id}</div></div>
+                    `;
+                    d.onclick = () => {
+                        searchResults.classList.add('hidden');
+                        searchInput.value = '';
+                        if (!chats[u.id]) {
+                            chats[u.id] = { user: u, messages: [], unread: 0, lastMessage: null };
+                            renderChats();
+                        }
+                        openChat(u.id);
+                    };
+                    searchResults.appendChild(d);
+                });
+            } catch (e) { console.error(e); }
+        };
+
+        logoutBtn.onclick = () => {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            currentUser = null;
+            currentToken = null;
+            selectedChatId = null;
+            messages = [];
+            chats = {};
+            authScreen.classList.remove('hidden');
+            mainScreen.classList.add('hidden');
+            toast.classList.add('hidden');
+        };
+
+        const savedToken = localStorage.getItem('token');
+        const savedUser = JSON.parse(localStorage.getItem('user'));
+        if (savedToken && savedUser) loginUser(savedUser, savedToken);
+        console.log('🚀 888 мессенджер запущен!');
+    </script>
+</body>
+</html>
