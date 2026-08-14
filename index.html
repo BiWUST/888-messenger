@@ -134,6 +134,7 @@
     </div>
 
     <script>
+        // ========== ГЛАВНОЕ: ПОДКЛЮЧАЕМСЯ К БЭКЕНДУ НА RENDER ==========
         const API_URL = 'https://eight88-messenger.onrender.com/api';
         const socket = io('https://eight88-messenger.onrender.com');
 
@@ -242,17 +243,14 @@
             renderChats();
         }
 
-        // ========== ИСПРАВЛЕННАЯ ФУНКЦИЯ ==========
         function setupSocket() {
             socket.off('new_message');
             socket.off('message_sent');
 
             socket.on('message_sent', (msg) => {
                 console.log('✅ Сообщение сохранено:', msg);
-                
                 const chat = chats[msg.toId];
                 if (chat) {
-                    // Ищем ВРЕМЕННОЕ сообщение с таким же текстом
                     const idx = chat.messages.findIndex(m => m._temp === true && m.text === msg.text);
                     if (idx !== -1) {
                         chat.messages[idx] = msg;
@@ -269,7 +267,6 @@
             socket.on('new_message', (msg) => {
                 if (msg.fromId === currentUser.id) return;
                 console.log('📨 Новое сообщение от:', msg.fromId);
-                
                 if (!chats[msg.fromId]) {
                     axios.get(`${API_URL}/users/${msg.fromId}`).then(res => {
                         chats[msg.fromId] = {
@@ -290,7 +287,6 @@
             if (!chats[userId]) return;
             chats[userId].messages.push(msg);
             chats[userId].lastMessage = msg;
-            
             if (selectedChatId === userId) {
                 messages = chats[userId].messages;
                 renderMessages();
@@ -403,7 +399,6 @@
         function sendMessage() {
             const text = messageInput.value.trim();
             if (!text || !selectedChatId) return;
-            
             const tempMsg = {
                 id: Date.now(),
                 text: text,
@@ -412,7 +407,6 @@
                 createdAt: new Date().toISOString(),
                 _temp: true
             };
-            
             if (!chats[selectedChatId]) {
                 axios.get(`${API_URL}/users/${selectedChatId}`).then(res => {
                     chats[selectedChatId] = {
@@ -434,7 +428,6 @@
                 renderMessages();
                 renderChats();
             }
-            
             messageInput.value = '';
             socket.emit('send_message', { toId: selectedChatId, text });
         }
@@ -505,6 +498,8 @@
         const savedUser = JSON.parse(localStorage.getItem('user'));
         if (savedToken && savedUser) loginUser(savedUser, savedToken);
         console.log('🚀 888 мессенджер запущен!');
+        console.log('🔗 Бэкенд: https://eight88-messenger.onrender.com');
+        console.log('🌐 Сайт: https://biwust.github.io/888-messenger/');
     </script>
 </body>
 </html>
