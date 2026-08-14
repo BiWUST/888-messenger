@@ -130,32 +130,53 @@ app.get('/api/messages/:userId/:otherUserId', async (req, res) => {
 io.on('connection', (socket) => {
     console.log('👤 Пользователь подключился');
 
-    // Аутентификация сокета
+    // Аутентификация и загрузка всех сообщений
     socket.on('authenticate', (token) => {
         try {
             const decoded = jwt.verify(token, SECRET_KEY);
             socket.userId = decoded.id;
             socket.join(`user_${decoded.id}`);
             console.log(`✅ Пользователь ${decoded.id} аутентифицирован`);
-    
-            // === НОВОЕ: Отправляем все непрочитанные сообщения ===
+
+            // === 1. Находим все сообщения для этого пользователя ===
             Message.findAll({
                 where: {
-                    toId: decoded.id,
-                    read: false
-                }
-            }).then(messages => {
+                    toId: decoded.id
+                },
+                order: [['createdAt', 'ASC']]
+            }).then(async (messages) => {
                 if (messages.length > 0) {
-                    console.log(`📦 Отправка ${messages.length} непрочитанных сообщений для ${decoded.id}`);
+                    console.log(`📦 Отправка ${messages.length} сообщений для ${decoded.id}`);
+                    
+                    // === 2. Отправляем все сообщения ===
                     messages.forEach(msg => {
                         socket.emit('new_message', msg);
-                        // Сразу помечаем как прочитанные
-                        msg.update({ read: true });
                     });
+
+                    // === 3. Помечаем все как прочитанные ===
+                    await Message.update(
+                        { read: true },
+                        { where: { toId: decoded.id, read: false } }
+                    );
+
+                    // === 4. Отправляем список отправителей (чтобы создать чаты) ===
+                    const senderIds = [...new Set(messages.map(m => m.fromId))];
+                    for (const senderId of senderIds) {
+                        const user = await User.findByPk(senderId, {
+                            attributes: ['id', 'username']
+                        });
+                        if (user) {
+                            const lastMsg = messages.filter(m => m.fromId === senderId).pop();
+                            socket.emit('new_chat', {
+                                userId: user.id,
+                                username: user.username,
+                                lastMessage: lastMsg
+                            });
+                        }
+                    }
                 }
             });
-    
-            // Отправляем подтверждение
+
             socket.emit('authenticated', { userId: decoded.id });
         } catch (error) {
             console.log('❌ Ошибка аутентификации:', error.message);
@@ -176,7 +197,6 @@ io.on('connection', (socket) => {
 
             console.log(`💬 ${fromId} -> ${toId}: ${text}`);
 
-            // Сохраняем в базу
             const message = await Message.create({
                 fromId,
                 toId,
@@ -184,7 +204,6 @@ io.on('connection', (socket) => {
                 read: false
             });
 
-            // Формируем данные для отправки
             const messageData = {
                 id: message.id,
                 text: message.text,
@@ -202,8 +221,6 @@ io.on('connection', (socket) => {
             // Отправляем получателю в ЕГО КОМНАТУ!
             const recipientRoom = `user_${toId}`;
             console.log(`📨 Отправка получателю ${toId} в комнату ${recipientRoom}`);
-            
-            // Отправляем в комнату получателя
             io.to(recipientRoom).emit('new_message', messageData);
             console.log(`✅ Сообщение отправлено в комнату ${recipientRoom}`);
 
@@ -235,9 +252,11 @@ io.on('connection', (socket) => {
 // ЗАПУСК СЕРВЕРА
 // =============================================
 
-const PORT = process.env.PORT || 5001;
-server.listen(PORT, async () => {
+const PORT = process.env.PORT || 10000;
+const HOST = '0.0.0.0';
+server.listen(PORT, HOST, async () => {
     await sequelize.sync({ force: true });
     console.log(`✅ База данных создана`);
-    console.log(`🚀 Сервер запущен на http://localhost:${PORT}`);
+    console.log(`🚀 Сервер запущен на http://${HOST}:${PORT}`);
+    console.log(`🌐 Доступен: https://eight88-messenger.onrender.com`);
 });
