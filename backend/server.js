@@ -138,7 +138,7 @@ io.on('connection', (socket) => {
             socket.join(`user_${decoded.id}`);
             console.log(`✅ Пользователь ${decoded.id} аутентифицирован`);
 
-            // === 1. Находим все сообщения для этого пользователя ===
+            // === 1. Находим ВСЕ сообщения для этого пользователя ===
             Message.findAll({
                 where: {
                     toId: decoded.id
@@ -229,15 +229,21 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Отметка о прочтении
+    // === НОВОЕ: Отметка о прочтении ВСЕХ сообщений от пользователя ===
     socket.on('mark_read', async (data) => {
         try {
-            const { messageId } = data;
-            await Message.update(
+            const { fromId, toId } = data;
+            const updated = await Message.update(
                 { read: true },
-                { where: { id: messageId } }
+                { 
+                    where: { 
+                        fromId: fromId,
+                        toId: toId,
+                        read: false
+                    } 
+                }
             );
-            console.log(`📖 Сообщение ${messageId} прочитано`);
+            console.log(`📖 Все сообщения от ${fromId} для ${toId} помечены как прочитанные (${updated[0]} шт.)`);
         } catch (error) {
             console.error('❌ Ошибка отметки прочтения:', error);
         }
