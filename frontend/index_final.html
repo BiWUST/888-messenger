@@ -76,6 +76,7 @@
 
     <!-- ГЛАВНЫЙ ЭКРАН -->
     <div id="mainScreen" class="hidden flex h-screen bg-[#0a0a0a]">
+        <!-- ЛЕВАЯ ПАНЕЛЬ -->
         <div class="w-80 bg-[#12121a] border-r border-[#1a1a2e] flex flex-col h-screen">
             <div class="p-4 border-b border-[#1a1a2e]">
                 <div class="flex justify-between items-center">
@@ -97,9 +98,14 @@
             </div>
         </div>
 
+        <!-- ПРАВАЯ ПАНЕЛЬ (ЧАТ) -->
         <div class="flex-1 flex flex-col bg-[#0f0f17]">
+            <!-- ШАПКА ЧАТА С КНОПКОЙ НАЗАД -->
             <div id="chatHeader" class="p-4 border-b border-[#1a1a2e] bg-[#12121a] hidden">
                 <div class="flex items-center gap-3">
+                    <button id="backBtn" class="text-gray-400 hover:text-white transition text-xl leading-none" title="Назад">
+                        ←
+                    </button>
                     <div id="chatAvatar" class="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-blue-500 flex items-center justify-center font-bold"></div>
                     <div>
                         <div id="chatName" class="font-semibold"></div>
@@ -107,6 +113,7 @@
                     </div>
                 </div>
             </div>
+
             <div id="messagesContainer" class="flex-1 overflow-y-auto p-4 space-y-2 scrollbar-hide">
                 <div id="emptyMessages" class="text-center text-gray-500 mt-10">
                     <div class="text-4xl mb-3">👋</div>
@@ -116,12 +123,14 @@
                 <div id="messagesList"></div>
                 <div id="messagesEnd"></div>
             </div>
+
             <div id="inputArea" class="hidden p-4 border-t border-[#1a1a2e] bg-[#12121a]">
                 <div class="flex gap-3">
                     <input id="messageInput" type="text" placeholder="Введите сообщение..." class="flex-1 bg-[#1a1a2e] rounded-xl px-4 py-3 outline-none focus:ring-1 focus:ring-[#2b6fde] text-white">
                     <button id="sendBtn" class="bg-[#2b6fde] hover:bg-[#1e5bb8] transition px-6 rounded-xl font-semibold">Отправить</button>
                 </div>
             </div>
+
             <div id="welcomeScreen" class="flex-1 flex items-center justify-center">
                 <div class="text-center text-gray-500">
                     <div class="text-6xl mb-4">🤖</div>
@@ -134,7 +143,7 @@
     </div>
 
     <script>
-        // ========== ПОДКЛЮЧЕНИЕ К БЭКЕНДУ НА RENDER ==========
+        // ========== ПОДКЛЮЧЕНИЕ К БЭКЕНДУ ==========
         const API_URL = 'https://eight88-messenger.onrender.com/api';
         const socket = io('https://eight88-messenger.onrender.com');
 
@@ -177,6 +186,7 @@
         const toast = $('toast');
         const toastName = $('toastName');
         const toastText = $('toastText');
+        const backBtn = $('backBtn');
         let toastTimer = null;
 
         // ========== АВТОРИЗАЦИЯ ==========
@@ -227,6 +237,19 @@
         registerId.onkeydown = e => { if (e.key === 'Enter') registerBtn.click(); };
         registerUsername.onkeydown = e => { if (e.key === 'Enter') registerBtn.click(); };
         registerPassword.onkeydown = e => { if (e.key === 'Enter') registerBtn.click(); };
+
+        // ========== КНОПКА НАЗАД ==========
+        backBtn.onclick = function() {
+            selectedChatId = null;
+            messages = [];
+            chatHeader.classList.add('hidden');
+            inputArea.classList.add('hidden');
+            welcomeScreen.classList.remove('hidden');
+            messageInput.value = '';
+            renderMessages();
+            renderChats();
+            console.log('🔙 Выход из переписки');
+        };
 
         // ========== ОСНОВНОЙ ЭКРАН ==========
         function loginUser(user, token) {
