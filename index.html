@@ -365,15 +365,19 @@
         function openChat(userId) {
             selectedChatId = userId;
             
-            // === НОВОЕ: Отправляем отметку о прочтении ===
+            // === ОТПРАВЛЯЕМ ОТМЕТКУ О ПРОЧТЕНИИ ===
             socket.emit('mark_read', {
                 fromId: userId,
                 toId: currentUser.id
             });
-            // ============================================
-
+            
+            // === СБРАСЫВАЕМ СЧЁТЧИК НА КЛИЕНТЕ ===
             if (chats[userId]) {
                 chats[userId].unread = 0;
+                renderChats();
+            }
+
+            if (chats[userId]) {
                 messages = chats[userId].messages || [];
             } else {
                 messages = [];
